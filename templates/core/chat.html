@@ -1,0 +1,173 @@
+{% extends 'core/base.html' %}
+
+{% block title %}AI Chat{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>AI Chat Interface</h1>
+        <p class="lead">Ask questions about electricity market data in natural language</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Chat with GNA Energy AI</h5>
+            </div>
+            <div class="card-body">
+                <div id="chat-messages" class="mb-3" style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6; padding: 15px; background-color: #f8f9fa;">
+                    <div class="alert alert-info">
+                        <strong>Welcome!</strong> Ask me about electricity market data, prices, volumes, or trends. 
+                        For example: "Show average price for DAM last week" or "Total volume for RTM yesterday"
+                    </div>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="chat-input" class="form-control" placeholder="Ask a question about energy data..." maxlength="500">
+                    <button class="btn btn-primary" type="button" id="send-btn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6>Example Queries</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary btn-sm example-query" data-query="Show average price for DAM last week">
+                        Average DAM Price Last Week
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm example-query" data-query="Total volume for RTM yesterday">
+                        RTM Volume Yesterday
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm example-query" data-query="Load data for last 30 days">
+                        Load Data (30 days)
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm example-query" data-query="Generation data last month">
+                        Generation Data Last Month
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm example-query" data-query="Price trend for DAM">
+                        DAM Price Trend
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6>Tips</h6>
+            </div>
+            <div class="card-body">
+                <ul class="small">
+                    <li>Ask about DAM (Day Ahead Market) or RTM (Real Time Market)</li>
+                    <li>Query specific time periods (yesterday, last week, last month)</li>
+                    <li>Ask for averages, totals, or trends</li>
+                    <li>Include load or generation data queries</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    const chatMessages = $('#chat-messages');
+    const chatInput = $('#chat-input');
+    const sendBtn = $('#send-btn');
+
+    // Get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken') || $('meta[name=csrf-token]').attr('content');
+
+    function addMessage(content, isUser = false) {
+        const messageClass = isUser ? 'alert-primary' : 'alert-success';
+        const sender = isUser ? 'You' : 'GNA AI';
+        const message = `
+            <div class="alert ${messageClass} mb-2">
+                <strong>${sender}:</strong> ${content}
+            </div>
+        `;
+        chatMessages.append(message);
+        chatMessages.scrollTop(chatMessages[0].scrollHeight);
+    }
+
+    function sendQuery(query) {
+        if (!query.trim()) return;
+
+        addMessage(query, true);
+        sendBtn.prop('disabled', true).text('Sending...');
+
+        $.ajax({
+            url: '/api/nlp-query/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': csrftoken
+            },
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                addMessage(response.response || 'No response received');
+                if (response.data) {
+                    // Format data nicely if it's an object/array
+                    let dataStr = '';
+                    if (typeof response.data === 'object') {
+                        dataStr = JSON.stringify(response.data, null, 2);
+                    } else {
+                        dataStr = response.data;
+                    }
+                    addMessage(`<pre>${dataStr}</pre>`);
+                }
+            },
+            error: function(xhr) {
+                console.error('Error:', xhr);
+                let errorMsg = 'Error processing query';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                } else if (xhr.responseJSON && xhr.responseJSON.response) {
+                    errorMsg = xhr.responseJSON.response;
+                } else if (xhr.responseText) {
+                    errorMsg = `Server error: ${xhr.status} ${xhr.statusText}`;
+                }
+                addMessage(`Error: ${errorMsg}`);
+            },
+            complete: function() {
+                sendBtn.prop('disabled', false).text('Send');
+                chatInput.val('');
+            }
+        });
+    }
+
+    sendBtn.click(function() {
+        sendQuery(chatInput.val());
+    });
+
+    chatInput.keypress(function(e) {
+        if (e.which === 13) { // Enter key
+            sendQuery(chatInput.val());
+        }
+    });
+
+    $('.example-query').click(function() {
+        const query = $(this).data('query');
+        chatInput.val(query);
+        sendQuery(query);
+    });
+});
+</script>
+{% endblock %}

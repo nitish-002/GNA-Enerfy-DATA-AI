@@ -1,0 +1,105 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>GNA Energy Insights Dashboard</h1>
+        <p class="lead">Real-time electricity market data and analytics for Uttarakhand</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5>Products</h5>
+                <h2>{{ products.count }}</h2>
+                <small>Market Products (DAM, RTM)</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5>Generators</h5>
+                <h2>{{ generators.count }}</h2>
+                <small>Power Generation Units</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h5>DISCOMs</h5>
+                <h2>{{ discoms.count }}</h2>
+                <small>Distribution Companies</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5>Market Data</h5>
+                <h2>{{ recent_market_data.count }}</h2>
+                <small>Recent Records</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Market Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Timestamp</th>
+                                <th>Block</th>
+                                <th>MCP (₹/MWh)</th>
+                                <th>MCV (MWh)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in recent_market_data|slice:":10" %}
+                            <tr>
+                                <td>{{ data.product.name }}</td>
+                                <td>{{ data.timestamp|date:"Y-m-d H:i" }}</td>
+                                <td>{{ data.block_number }}</td>
+                                <td>₹{{ data.mcp }}</td>
+                                <td>{{ data.mcv }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <h5>Quick Start Guide:</h5>
+            <ol>
+                <li>Generate sample data: <code>python manage.py ingest_data --generate-sample</code></li>
+                <li>Explore the <a href="{% url 'core:charts' %}">Charts</a> section for visualizations</li>
+                <li>Try the <a href="{% url 'core:chat' %}">AI Chat</a> for natural language queries</li>
+                <li>Access the <a href="/admin/">Admin</a> panel to manage data</li>
+            </ol>
+        </div>
+    </div>
+</div>
+{% endblock %}

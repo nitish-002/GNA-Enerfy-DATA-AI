@@ -1,0 +1,339 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Charts{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>Market Data Visualization</h1>
+        <p class="lead">Interactive charts and graphs for electricity market analysis</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Chart Controls</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="product-select">Product:</label>
+                        <select id="product-select" class="form-select">
+                            <option value="DAM">DAM (Day Ahead Market)</option>
+                            <option value="RTM">RTM (Real Time Market)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="start-date">Start Date:</label>
+                        <input type="date" id="start-date" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="end-date">End Date:</label>
+                        <input type="date" id="end-date" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label>&nbsp;</label>
+                        <button id="load-data" class="btn btn-primary d-block">Load Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Market Clearing Price (MCP)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="price-chart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Market Clearing Volume (MCV)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="volume-chart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Price vs Volume Correlation</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="correlation-chart" width="800" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Market Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div id="stats-content">
+                    <p class="text-muted">Select date range and click "Load Data" to view statistics</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let priceChart, volumeChart, correlationChart;
+
+$(document).ready(function() {
+    // Set default dates (last 7 days)
+    const today = new Date();
+    const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    $('#end-date').val(today.toISOString().split('T')[0]);
+    $('#start-date').val(lastWeek.toISOString().split('T')[0]);
+
+    // Initialize charts
+    initializeCharts();
+
+    // Load data button
+    $('#load-data').click(function() {
+        loadChartData();
+    });
+
+    // Load initial data
+    loadChartData();
+});
+
+function initializeCharts() {
+    const priceCtx = document.getElementById('price-chart').getContext('2d');
+    const volumeCtx = document.getElementById('volume-chart').getContext('2d');
+    const correlationCtx = document.getElementById('correlation-chart').getContext('2d');
+
+    priceChart = new Chart(priceCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Price (₹/MWh)',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Price (₹/MWh)'
+                    }
+                }
+            }
+        }
+    });
+
+    volumeChart = new Chart(volumeCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Volume (MWh)',
+                data: [],
+                backgroundColor: 'rgba(153, 102, 255, 0.6)',
+                borderColor: 'rgb(153, 102, 255)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Volume (MWh)'
+                    }
+                }
+            }
+        }
+    });
+
+    correlationChart = new Chart(correlationCtx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Price vs Volume',
+                data: [],
+                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                borderColor: 'rgb(255, 99, 132)'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Volume (MWh)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Price (₹/MWh)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function loadChartData() {
+    const product = $('#product-select').val();
+    const startDate = $('#start-date').val();
+    const endDate = $('#end-date').val();
+
+    if (!startDate || !endDate) {
+        alert('Please select both start and end dates');
+        return;
+    }
+
+    $('#load-data').prop('disabled', true).text('Loading...');
+
+    // Fetch market data
+    $.ajax({
+        url: `/api/market-data/?product=${product}&start_date=${startDate}&end_date=${endDate}`,
+        method: 'GET',
+        success: function(response) {
+            updateCharts(response.results || response);
+            updateStats(response.results || response);
+        },
+        error: function(xhr) {
+            console.error('Error loading data:', xhr);
+            alert('Error loading chart data');
+        },
+        complete: function() {
+            $('#load-data').prop('disabled', false).text('Load Data');
+        }
+    });
+}
+
+function updateCharts(data) {
+    if (!data || data.length === 0) {
+        alert('No data available for the selected period');
+        return;
+    }
+
+    // Process data for charts
+    const labels = [];
+    const prices = [];
+    const volumes = [];
+    const correlationData = [];
+
+    data.forEach(item => {
+        const timestamp = new Date(item.timestamp).toLocaleDateString();
+        const block = item.block_number;
+        const label = `${timestamp} B${block}`;
+        
+        labels.push(label);
+        prices.push(parseFloat(item.mcp));
+        volumes.push(parseFloat(item.mcv));
+        
+        correlationData.push({
+            x: parseFloat(item.mcv),
+            y: parseFloat(item.mcp)
+        });
+    });
+
+    // Update price chart
+    priceChart.data.labels = labels;
+    priceChart.data.datasets[0].data = prices;
+    priceChart.update();
+
+    // Update volume chart
+    volumeChart.data.labels = labels;
+    volumeChart.data.datasets[0].data = volumes;
+    volumeChart.update();
+
+    // Update correlation chart
+    correlationChart.data.datasets[0].data = correlationData;
+    correlationChart.update();
+}
+
+function updateStats(data) {
+    if (!data || data.length === 0) {
+        $('#stats-content').html('<p class="text-muted">No data available</p>');
+        return;
+    }
+
+    const prices = data.map(item => parseFloat(item.mcp));
+    const volumes = data.map(item => parseFloat(item.mcv));
+
+    const avgPrice = (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2);
+    const minPrice = Math.min(...prices).toFixed(2);
+    const maxPrice = Math.max(...prices).toFixed(2);
+    
+    const totalVolume = volumes.reduce((a, b) => a + b, 0).toFixed(2);
+    const avgVolume = (totalVolume / volumes.length).toFixed(2);
+
+    const statsHtml = `
+        <div class="row">
+            <div class="col-md-2">
+                <div class="text-center">
+                    <h4 class="text-primary">₹${avgPrice}</h4>
+                    <small>Avg Price</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <h4 class="text-success">₹${minPrice}</h4>
+                    <small>Min Price</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <h4 class="text-danger">₹${maxPrice}</h4>
+                    <small>Max Price</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <h4 class="text-info">${totalVolume}</h4>
+                    <small>Total Volume (MWh)</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <h4 class="text-warning">${avgVolume}</h4>
+                    <small>Avg Volume (MWh)</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <h4 class="text-secondary">${data.length}</h4>
+                    <small>Total Records</small>
+                </div>
+            </div>
+        </div>
+    `;
+
+    $('#stats-content').html(statsHtml);
+}
+</script>
+{% endblock %}
