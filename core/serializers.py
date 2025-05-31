@@ -20,6 +20,7 @@ class DiscomSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class MarketDataSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     
     class Meta:

@@ -247,7 +247,121 @@ class NLPAgent:
         }
 
     def _handle_general_query(self, query):
+        # Check for ambiguous queries that need clarification
+        clarification = self._check_for_clarification(query)
+        if clarification:
+            return clarification
+        
+        # Check if this is truly an unrelated query (like weather, sports, etc.)
+        unrelated_terms = ['weather', 'sports', 'movie', 'food', 'restaurant', 'music', 'news', 'politics']
+        if any(term in query for term in unrelated_terms):
+            return {
+                'response': "I don't understand. I can help you with queries about average prices, total volumes, load data, generation data, and price trends. Try asking something like 'Show average price for DAM last week' or 'Total load yesterday'.",
+                'data': None
+            }
+            
         return {
             'response': "I can help you with queries about average prices, total volumes, load data, generation data, and price trends. Try asking something like 'Show average price for DAM last week' or 'Total load yesterday'.",
+            'data': None
+        }
+    
+    def _check_for_clarification(self, query):
+        """Handle ambiguous queries and provide follow-up questions"""
+        
+        # Comparative queries that need more specificity (check this first)
+        comparison_terms = ['compare', 'vs', 'versus', 'difference', 'better', 'higher', 'lower']
+        if any(term in query for term in comparison_terms):
+            return {
+                'response': "I can help with comparisons! Currently I can show data for individual time periods. What specific comparison would you like to see?",
+                'data': None,
+                'clarification': {
+                    'type': 'comparison_help',
+                    'suggestions': [
+                        "Try asking for specific time periods, like 'average price for DAM last week' and 'average price for DAM last month'",
+                        "For trends over time, ask 'price trend for DAM last month'",
+                        "For different markets, ask 'average price for DAM yesterday' and 'average price for RTM yesterday'"
+                    ]
+                }
+            }
+        
+        # Query mentions price but no specific type
+        if ('price' in query) and not self._extract_product(query):
+            return {
+                'response': "I can help you with price information. Which market would you like to know about?",
+                'data': None,
+                'clarification': {
+                    'type': 'product_selection',
+                    'options': [
+                        {'label': 'DAM (Day Ahead Market)', 'value': 'dam'},
+                        {'label': 'RTM (Real Time Market)', 'value': 'rtm'},
+                        {'label': 'Both markets', 'value': 'all'}
+                    ],
+                    'follow_up_template': 'average price for {product} {time_period}'
+                }
+            }
+        
+        # Query mentions volume but no specific market
+        if ('volume' in query) and not self._extract_product(query):
+            return {
+                'response': "I can provide volume information. Which market are you interested in?",
+                'data': None,
+                'clarification': {
+                    'type': 'product_selection',
+                    'options': [
+                        {'label': 'DAM (Day Ahead Market)', 'value': 'dam'},
+                        {'label': 'RTM (Real Time Market)', 'value': 'rtm'},
+                        {'label': 'Both markets', 'value': 'all'}
+                    ],
+                    'follow_up_template': 'total volume for {product} {time_period}'
+                }
+            }
+        
+        # Query has product but unclear time period
+        if self._extract_product(query) and not any(time_expr in query for time_expr in self.time_mappings.keys()):
+            product = self._extract_product(query)
+            return {
+                'response': f"I can provide {product} information. What time period are you interested in?",
+                'data': None,
+                'clarification': {
+                    'type': 'time_selection',
+                    'options': [
+                        {'label': 'Today', 'value': 'today'},
+                        {'label': 'Yesterday', 'value': 'yesterday'},
+                        {'label': 'Last week', 'value': 'last week'},
+                        {'label': 'Last month', 'value': 'last month'},
+                        {'label': 'Last 7 days', 'value': 'last 7 days'},
+                        {'label': 'Last 30 days', 'value': 'last 30 days'}
+                    ],
+                    'follow_up_template': f'average price for {product.lower()} {{time_period}}'
+                }
+            }
+        
+        # Vague queries that could mean multiple things
+        vague_terms = ['show', 'tell', 'get', 'find', 'data', 'information', 'details']
+        if any(term in query for term in vague_terms) and len(query.split()) <= 3:
+            return {
+                'response': "I'd be happy to help! What specific information would you like?",
+                'data': None,
+                'clarification': {
+                    'type': 'query_type_selection',
+                    'options': [
+                        {'label': 'Average electricity prices', 'value': 'average price'},
+                        {'label': 'Trading volumes', 'value': 'total volume'},
+                        {'label': 'Load/demand data', 'value': 'load data'},
+                        {'label': 'Generation data', 'value': 'generation data'},
+                        {'label': 'Price trends/charts', 'value': 'price trend'}
+                    ],
+                    'follow_up_template': '{query_type} for {product} {time_period}'
+                }
+            }
+        
+        return None
+    
+    def process_clarification_response(self, original_query, clarification_response):
+        """Process user response to clarification questions"""
+        # This method would be called when user responds to clarification
+        # For now, return a simple acknowledgment
+        return {
+            'response': f"Thank you for the clarification. Please ask your question with more specific details.",
             'data': None
         }

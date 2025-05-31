@@ -18,9 +18,11 @@
             </div>
             <div class="card-body">
                 <div id="chat-messages" class="mb-3" style="height: 400px; overflow-y: auto; border: 1px solid #dee2e6; padding: 15px; background-color: #f8f9fa;">
-                    <div class="alert alert-info">
-                        <strong>Welcome!</strong> Ask me about electricity market data, prices, volumes, or trends. 
-                        For example: "Show average price for DAM last week" or "Total volume for RTM yesterday"
+                    <div class="message bot-message">
+                        <div class="message-content">
+                            <strong>Welcome!</strong> Ask me about electricity market data, prices, volumes, or trends. 
+                            For example: "Show average price for DAM last week" or "Total volume for RTM yesterday"
+                        </div>
                     </div>
                 </div>
                 <div class="input-group">
@@ -52,6 +54,9 @@
                     <button class="btn btn-outline-primary btn-sm example-query" data-query="Price trend for DAM">
                         DAM Price Trend
                     </button>
+                    <button class="btn btn-outline-secondary btn-sm example-query" data-query="Show me prices">
+                        Ambiguous Query (Demo)
+                    </button>
                 </div>
             </div>
         </div>
@@ -66,12 +71,49 @@
                     <li>Query specific time periods (yesterday, last week, last month)</li>
                     <li>Ask for averages, totals, or trends</li>
                     <li>Include load or generation data queries</li>
+                    <li>Try ambiguous queries to see clarification features!</li>
                 </ul>
             </div>
         </div>
     </div>
 </div>
 
+<style>
+.message {
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.user-message {
+    background-color: #007bff;
+    color: white;
+    margin-left: 50px;
+    text-align: right;
+}
+
+.bot-message {
+    background-color: #e9ecef;
+    color: #495057;
+    margin-right: 50px;
+}
+
+.message-content {
+    margin-bottom: 0;
+}
+
+.clarification-section {
+    border-top: 1px solid #dee2e6;
+    padding-top: 10px;
+}
+
+.chart-container {
+    max-width: 100%;
+    height: 300px;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 $(document).ready(function() {
     const chatMessages = $('#chat-messages');
@@ -95,16 +137,123 @@ $(document).ready(function() {
     }
     const csrftoken = getCookie('csrftoken') || $('meta[name=csrf-token]').attr('content');
 
-    function addMessage(content, isUser = false) {
-        const messageClass = isUser ? 'alert-primary' : 'alert-success';
-        const sender = isUser ? 'You' : 'GNA AI';
-        const message = `
-            <div class="alert ${messageClass} mb-2">
-                <strong>${sender}:</strong> ${content}
-            </div>
-        `;
-        chatMessages.append(message);
+    function addMessage(message, isUser, data = null, clarification = null) {
+        const messageDiv = $('<div>').addClass(`message ${isUser ? 'user-message' : 'bot-message'}`);
+        messageDiv.html(`<div class="message-content">${message}</div>`);
+        
+        // Handle clarification questions
+        if (clarification && !isUser) {
+            const clarificationDiv = $('<div>').addClass('clarification-section mt-3');
+            
+            if (clarification.type === 'product_selection' || clarification.type === 'time_selection' || clarification.type === 'query_type_selection') {
+                clarificationDiv.append('<p><small class="text-muted">Choose an option:</small></p>');
+                const buttonGroup = $('<div>').addClass('btn-group-vertical d-grid gap-2');
+                
+                clarification.options.forEach(option => {
+                    const btn = $('<button>')
+                        .addClass('btn btn-outline-primary btn-sm')
+                        .text(option.label)
+                        .click(function() {
+                            let followUpQuery = clarification.follow_up_template;
+                            
+                            if (clarification.type === 'product_selection') {
+                                followUpQuery = followUpQuery.replace('{product}', option.value);
+                                followUpQuery = followUpQuery.replace('{time_period}', 'last week'); // default
+                            } else if (clarification.type === 'time_selection') {
+                                followUpQuery = followUpQuery.replace('{time_period}', option.value);
+                            } else if (clarification.type === 'query_type_selection') {
+                                followUpQuery = followUpQuery.replace('{query_type}', option.value);
+                                followUpQuery = followUpQuery.replace('{product}', 'DAM'); // default
+                                followUpQuery = followUpQuery.replace('{time_period}', 'last week'); // default
+                            }
+                            
+                            chatInput.val(followUpQuery);
+                            sendQuery(followUpQuery);
+                        });
+                    buttonGroup.append(btn);
+                });
+                
+                clarificationDiv.append(buttonGroup);
+            } else if (clarification.type === 'comparison_help') {
+                clarificationDiv.append('<p><small class="text-muted">Suggestions:</small></p>');
+                const suggestionsList = $('<ul>').addClass('list-unstyled');
+                clarification.suggestions.forEach(suggestion => {
+                    const listItem = $('<li>').addClass('mb-2')
+                        .html(`<small class="text-muted">💡 ${suggestion}</small>`);
+                    suggestionsList.append(listItem);
+                });
+                clarificationDiv.append(suggestionsList);
+            }
+            
+            messageDiv.append(clarificationDiv);
+        }
+        
+        // Handle chart data
+        if (data && data.trend_data) {
+            const chartContainer = $('<div>').addClass('chart-container mt-3');
+            const canvas = $('<canvas>').attr('id', `chart-${Date.now()}`);
+            chartContainer.append(canvas);
+            messageDiv.append(chartContainer);
+            
+            setTimeout(() => {
+                createChart(canvas[0], data);
+            }, 100);
+        }
+        
+        // Handle structured data display
+        if (data && !data.trend_data) {
+            const dataDiv = $('<div>').addClass('mt-2');
+            dataDiv.append('<small class="text-muted">Data details:</small>');
+            const pre = $('<pre>').addClass('mt-1 p-2 bg-light border rounded small');
+            pre.text(JSON.stringify(data, null, 2));
+            dataDiv.append(pre);
+            messageDiv.append(dataDiv);
+        }
+        
+        chatMessages.append(messageDiv);
         chatMessages.scrollTop(chatMessages[0].scrollHeight);
+    }
+
+    function createChart(canvas, data) {
+        const ctx = canvas.getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.trend_data.map(item => item.date),
+                datasets: [{
+                    label: 'Price (₹/MWh)',
+                    data: data.trend_data.map(item => item.price),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Price (₹/MWh)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Price Trend - ${data.product || 'All Markets'}`
+                    }
+                }
+            }
+        });
     }
 
     function sendQuery(query) {
@@ -122,17 +271,12 @@ $(document).ready(function() {
             },
             data: JSON.stringify({ query: query }),
             success: function(response) {
-                addMessage(response.response || 'No response received');
-                if (response.data) {
-                    // Format data nicely if it's an object/array
-                    let dataStr = '';
-                    if (typeof response.data === 'object') {
-                        dataStr = JSON.stringify(response.data, null, 2);
-                    } else {
-                        dataStr = response.data;
-                    }
-                    addMessage(`<pre>${dataStr}</pre>`);
-                }
+                addMessage(
+                    response.response || 'No response received',
+                    false,
+                    response.data,
+                    response.clarification
+                );
             },
             error: function(xhr) {
                 console.error('Error:', xhr);
@@ -144,7 +288,7 @@ $(document).ready(function() {
                 } else if (xhr.responseText) {
                     errorMsg = `Server error: ${xhr.status} ${xhr.statusText}`;
                 }
-                addMessage(`Error: ${errorMsg}`);
+                addMessage(`❌ ${errorMsg}`, false);
             },
             complete: function() {
                 sendBtn.prop('disabled', false).text('Send');
