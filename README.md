@@ -2,6 +2,13 @@
 
 A Django-based electricity data insights platform for GNA Energy, providing real-time power market data analysis and natural language querying capabilities.
 
+## DEMO VIDEO
+
+
+
+https://github.com/user-attachments/assets/a7cb11f3-07cc-4146-9a62-6d35f69ca22e
+
+
 ## Project Status
 
 ✅ **Production Ready** - All core features implemented and tested  
